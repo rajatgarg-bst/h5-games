@@ -1,11 +1,20 @@
 import React from "react";
 
+// Every link in the Info panel points off-site. Open them in a new tab so the
+// running sandspiel game underneath is never navigated away from. rel guards
+// against tabnabbing and referrer leakage for target="_blank" links.
+const A = ({ href, children }) => (
+  <a href={href} target="_blank" rel="noopener noreferrer">
+    {children}
+  </a>
+);
+
 const Info = () => {
   return (
     <div className="Info">
       <h1>Sandspiel </h1>
       <p>
-        Created by <a href="https://maxbittker.com">max bittker</a>
+        Created by <A href="https://maxbittker.com">max bittker</A>
       </p>
       <hr />
       <br />
@@ -16,20 +25,20 @@ const Info = () => {
       <p>
         Growing up, "falling sand" games like this one provided me hours of
         entertainment and imagination. I want to particularly thank ha55ii's{" "}
-        <a href="https://dan-ball.jp/en/javagame/dust/">Powder Game</a> as the
+        <A href="https://dan-ball.jp/en/javagame/dust/">Powder Game</A> as the
         primary inspiration for sandspiel.
       </p>
       <br />
       <p>
         If you want to read more the inspiration, architecture, and history of
         the game, I wrote a blog post (it gets technical in the middle):&nbsp;
-        <a href="https://maxbittker.com/making-sandspiel">Making Sandspiel</a>
+        <A href="https://maxbittker.com/making-sandspiel">Making Sandspiel</A>
       </p>
       <br />
       <p>
         If you'd like, you can view the{" "}
-        <a href="https://github.com/maxbittker/sandspiel">source code</a> or{" "}
-        <a href="https://github.com/maxbittker/sandspiel/issues">report bugs</a>{" "}
+        <A href="https://github.com/maxbittker/sandspiel">source code</A> or{" "}
+        <A href="https://github.com/maxbittker/sandspiel/issues">report bugs</A>{" "}
         on github or feel free to reach out on twitter and I'll try to answer!
       </p>
       <br />
@@ -38,7 +47,7 @@ const Info = () => {
         on it, your opinion is important to me and I want to do my best to
         ensure sandspiel is a friendly and kind place to play, without bullying,
         racism, transphobia, homophobia, or any other forms of bigotry. If something is wrong or there's some way I can
-        help, feel free to contact me at <a href="mailto:maxbittker@gmail.com">maxbittker@gmail.com</a> or <a href="https://twitter.com/maxbittker">@maxbittker on twitter.</a>
+        help, feel free to contact me at <A href="mailto:maxbittker@gmail.com">maxbittker@gmail.com</A> or <A href="https://twitter.com/maxbittker">@maxbittker on twitter.</A>
       </p>
       <br />
       <hr />

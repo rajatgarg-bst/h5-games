@@ -118,6 +118,12 @@ if (!isBench) {
 }
 
 function reset() {
+  // Stop the intro boot() animation if it's still running. Otherwise its async
+  // loop keeps dropping sand/seeds for the first couple of seconds after load,
+  // immediately repainting the grid we just cleared and making Reset (and undo)
+  // look like they do nothing.
+  window.stopboot = true;
+
   fluid.reset();
   fluid.update();
   fluid.reset();

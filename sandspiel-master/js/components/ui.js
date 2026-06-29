@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "react-router-dom";
 
 import * as wasm from "../../crate/pkg/sandtable_bg.wasm";
 import { Species } from "../../crate/pkg/sandtable";
@@ -8,6 +7,8 @@ const memory = wasm.memory;
 import { height, universe, width, reset } from "../index.js";
 import { pallette } from "../render.js";
 import { svgToImageData, rgbaToSpecies } from "../convertSVG";
+import Menu from "./menu";
+import Info from "./info";
 
 window.species = Species;
 let pallette_data = pallette();
@@ -61,6 +62,7 @@ class Index extends React.Component {
       paused: false,
       size: 2,
       selectedElement: Species.Water,
+      showInfo: false,
     };
     window.UI = this;
     // Always auto-play on initial load (regardless of the URL path the app is
@@ -68,12 +70,15 @@ class Index extends React.Component {
     window.paused = false;
   }
 
-  componentDidUpdate(prevProps) {
-    // pause the sim while the Info modal is open, resume when back on the game
-    const wasInfo = prevProps.location.pathname.includes("/info");
-    const isInfo = this.props.location.pathname.includes("/info");
-    if (isInfo && !wasInfo) this.pause();
-    if (!isInfo && wasInfo) this.play();
+  // Open/close the Info modal via local state so the URL never changes — the
+  // sim pauses while the modal is open and resumes when it closes.
+  openInfo() {
+    this.pause();
+    this.setState({ showInfo: true });
+  }
+  closeInfo() {
+    this.play();
+    this.setState({ showInfo: false });
   }
 
   togglePause() {
@@ -134,9 +139,14 @@ class Index extends React.Component {
   }
 
   render() {
-    let { size, paused, selectedElement } = this.state;
+    let { size, paused, selectedElement, showInfo } = this.state;
     return (
       <React.Fragment>
+        {showInfo && (
+          <Menu close={() => this.closeInfo()}>
+            <Info />
+          </Menu>
+        )}
         <button
           onClick={() => this.togglePause()}
           className={paused ? "selected" : ""}
@@ -154,9 +164,7 @@ class Index extends React.Component {
         </button>
 
         <button onClick={() => this.reset()}>Reset</button>
-        <Link to={{ pathname: "/info/" }}>
-          <button>Info</button>
-        </Link>
+        <button onClick={() => this.openInfo()}>Info</button>
 
         <span className="sizes">
           {sizeMap.map((v, i) => (
