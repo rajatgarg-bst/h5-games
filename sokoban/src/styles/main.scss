@@ -203,7 +203,9 @@ body {
   right: $spacing-sm;
   bottom: $spacing-md;
   background: rgba(0, 0, 0, 0.4);
-  padding: $spacing-xs;
+  padding: 0.4rem;
+  width: auto;   // override the legacy inline fixed 200px box so it sizes to content
+  height: auto;
   border-radius: 12px;
   @include box-shadow(0 2px 10px rgba(255, 255, 255, 0.15));
   touch-action: none; // Prevent scrolling when touching the controls
@@ -212,7 +214,7 @@ body {
   transition: transform 0.2s ease, opacity 0.3s ease;
   backdrop-filter: blur(2px);
   border: 2px solid rgba(101, 67, 33, 0.6);
-  max-width: 180px;
+  max-width: 132px;
   
   // Hide on desktop using feature query
   @media (hover: hover) and (pointer: fine) {
@@ -245,8 +247,8 @@ body {
   }
   
   .arrow-btn {
-    width: 50px;
-    height: 50px;
+    width: 38px;
+    height: 38px;
     margin: 0;
     display: flex;
     justify-content: center;
@@ -256,7 +258,7 @@ body {
     color: #faf0dc;
     border: 2px solid #3a2214;
     border-radius: 12px;
-    font-size: 24px;
+    font-size: 18px;
     cursor: pointer;
     position: relative;
     transition: all 0.15s ease-in-out;
@@ -278,6 +280,8 @@ body {
       display: block;
       font-weight: bold;
       position: relative;
+      font-size: 18px;   // override the legacy inline 26px so it fits the smaller button
+      padding: 0;
       text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
     }
     

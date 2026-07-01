@@ -10,6 +10,16 @@ export const CANVAS = {
   BACKGROUND_COLOR: "#000000",
 };
 
+// On-screen D-pad (touch devices only).
+// The board layout reserves DPAD_BAND vertical px above the score panel so the
+// puzzle is never drawn under the controls on any level; the D-pad is placed in
+// that band. Verified against all 50 levels on common portrait viewports.
+export const MOBILE_CONTROLS = {
+  DPAD_BAND: 190,       // reserved vertical space above the score panel, portrait (px)
+  DPAD_COLUMN: 150,     // reserved horizontal space on the left for the D-pad, landscape (px)
+  DPAD_BOTTOM_GAP: 24,  // gap between the D-pad and the score panel (px)
+};
+
 // Game Physics and Animation
 export const PHYSICS = {
   ANIMATION_SMOOTHNESS: 20,    // Increase from 4 to 20 for smoother pixel movement

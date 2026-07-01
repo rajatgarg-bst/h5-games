@@ -1751,167 +1751,128 @@ class Game {
         this.ctx.textAlign = "center";
         this.ctx.font = "20px Arial";
 
-        // Position logo with wave effect
+        // Position logo with wave effect, scaled down so it fits narrow screens
         const logoImg = this.resources.images.logo.image;
-        const logoWidth = logoImg.width;
-        const logoHeight = logoImg.height;
+        const logoScale = Math.min(1, (canvasWidth * 0.85) / logoImg.width);
+        const logoDrawWidth = logoImg.width * logoScale;
         const frame = Date.now() * 0.01;
 
-        // Animate the logo with a wave effect
-        for (let y = 0; y < logoHeight; y++) {
-            const x = Math.sin(y * 0.05 + frame) * 5 + (canvasWidth / 2 - logoWidth / 2);
-            this.ctx.drawImage(logoImg, 0, y, logoWidth, 1, x, y + -20, logoWidth, 1);
+        // Animate the logo with a wave effect, scaling each source row to fit
+        for (let y = 0; y < logoImg.height; y++) {
+            const x = Math.sin(y * 0.05 + frame) * 5 * logoScale + (canvasWidth / 2 - logoDrawWidth / 2);
+            this.ctx.drawImage(
+                logoImg,
+                0, y, logoImg.width, 1,
+                x, y * logoScale - 20, logoDrawWidth, logoScale + 0.5
+            );
         }
 
-        // Calculate button dimensions and positions for horizontal layout
+        // ----- Menu buttons: responsive layout -----
+        // The button art is a fixed 300x92 PNG. Drawing several at native size in a
+        // single row overflows narrow/mobile screens, so we scale the row to fit and
+        // fall back to a vertical stack when a row would get too cramped.
         const btnPlayImg = this.resources.images.btnPlay.image;
-        const buttonWidth = btnPlayImg.width;
-        const buttonHeight = btnPlayImg.height;
-        const buttonSpacing = 20; // Space between buttons
-        
-        // Calculate total width of all buttons and spacing
-        // If user is logged in, we'll show PLAY and LEVEL EDITOR buttons (2 buttons)
-        // If user is NOT logged in, we'll show PLAY, LEVEL EDITOR, and SIGN IN buttons (3 buttons)
+        const nativeBtnW = btnPlayImg.width;
+        const nativeBtnH = btnPlayImg.height;
         const numButtons = this.isUserAuthenticated ? 2 : 3;
-        const totalButtonsWidth = (buttonWidth * numButtons) + (buttonSpacing * (numButtons - 1));
-        
-        // Calculate starting X position to center all buttons as a group
-        const startX = (canvasWidth - totalButtonsWidth) / 2;
-        
-        // Common Y position for all buttons - positioned at 70% of canvas height
-        const buttonsY = canvasHeight * 0.7;
-        
-        // Draw the PLAY button (first button)
-        const playX = startX;
-        this.ctx.drawImage(btnPlayImg, playX, buttonsY);
-        
-        // Get "PLAY" text and convert to uppercase
-        const newGameText = this.resources.i18n.get('buttons.play').toUpperCase();
-        
-        // Adjust font size based on text length to prevent overflow
-        let fontSize = 30; // Default size
-        if (newGameText.length > 10) {
-            fontSize = 24;
-        }
-        if (newGameText.length > 15) {
-            fontSize = 20;
-        }
-        
-        this.ctx.font = `bold ${fontSize}px Arial`;
-        
-        // Position text centered in the button
-        const playBtnCenterY = buttonsY + buttonHeight/2 + 10; // +10 for optical centering
-        
-        // Text shadow for better visibility
-        this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-        this.ctx.fillText(newGameText, playX + buttonWidth/2 + 2, playBtnCenterY + 2);
-        
-        // Main text color
-        this.ctx.fillStyle = "white";
-        this.ctx.fillText(newGameText, playX + buttonWidth/2, playBtnCenterY);
-        
-        // Draw the LEVEL EDITOR button (second button)
-        const editorX = playX + buttonWidth + buttonSpacing;
-        this.ctx.drawImage(btnPlayImg, editorX, buttonsY);
-        
-        // Get "LEVEL EDITOR" text and convert to uppercase
-        const editorText = this.resources.i18n.get('buttons.levelEditor').toUpperCase();
-        
-        // Adjust font size based on text length to prevent overflow
-        let editorFontSize = 30; // Default size
-        if (editorText.length > 10) {
-            editorFontSize = 24;
-        }
-        if (editorText.length > 15) {
-            editorFontSize = 20;
-        }
-        
-        // Set the font size for editor button text
-        this.ctx.font = `bold ${editorFontSize}px Arial`;
-        
-        // Text shadow for better visibility
-        this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-        this.ctx.fillText(editorText, editorX + buttonWidth/2 + 2, playBtnCenterY + 2);
-        
-        // Main text color
-        this.ctx.fillStyle = "white";
-        this.ctx.fillText(editorText, editorX + buttonWidth/2, playBtnCenterY);
-        
-        // Initialize buttonAreas object
-        this.buttonAreas = {
-            play: { x: playX, y: buttonsY, width: buttonWidth, height: buttonHeight },
-            editor: { x: editorX, y: buttonsY, width: buttonWidth, height: buttonHeight }
-        };
 
-        // If user is authenticated, display username
+        // Buttons to draw, in order (PLAY, LEVEL EDITOR, and SIGN IN when logged out)
+        const buttonDefs = [
+            { key: 'play', text: this.resources.i18n.get('buttons.play').toUpperCase() },
+            { key: 'editor', text: this.resources.i18n.get('buttons.levelEditor').toUpperCase() },
+        ];
+        if (!this.isUserAuthenticated) {
+            buttonDefs.push({ key: 'login', text: this.resources.i18n.get('auth.signIn').toUpperCase() });
+        }
+
+        // Does a single centered row fit at a reasonable scale?
+        const rowGap = Math.max(12, canvasWidth * 0.02);
+        const maxRowWidth = canvasWidth * 0.92;
+        const nativeRowWidth = nativeBtnW * numButtons + rowGap * (numButtons - 1);
+        const rowScale = Math.min(1, maxRowWidth / nativeRowWidth);
+
+        let buttonWidth, buttonHeight;
+        const layout = [];
+
+        if (rowScale >= 0.62) {
+            // Horizontal row, centered at 70% of the canvas height
+            buttonWidth = nativeBtnW * rowScale;
+            buttonHeight = nativeBtnH * rowScale;
+            const gap = rowGap * rowScale;
+            const totalWidth = buttonWidth * numButtons + gap * (numButtons - 1);
+            const rowStartX = (canvasWidth - totalWidth) / 2;
+            const rowY = canvasHeight * 0.7;
+            for (let i = 0; i < numButtons; i++) {
+                layout.push({ x: rowStartX + i * (buttonWidth + gap), y: rowY });
+            }
+        } else {
+            // Vertical stack for narrow / portrait screens
+            buttonWidth = Math.min(nativeBtnW, canvasWidth * 0.72);
+            const vScale = buttonWidth / nativeBtnW;
+            buttonHeight = nativeBtnH * vScale;
+            const vGap = buttonHeight * 0.3;
+            const totalHeight = buttonHeight * numButtons + vGap * (numButtons - 1);
+            const x = (canvasWidth - buttonWidth) / 2;
+            const startY = Math.min(canvasHeight * 0.55, canvasHeight - totalHeight - canvasHeight * 0.08);
+            for (let i = 0; i < numButtons; i++) {
+                layout.push({ x, y: startY + i * (buttonHeight + vGap) });
+            }
+        }
+
+        // Draw each button with its label and register its clickable area
+        this.buttonAreas = {};
+        this.ctx.textAlign = "center";
+        const fontScale = buttonHeight / nativeBtnH;
+        for (let i = 0; i < buttonDefs.length; i++) {
+            const { key, text } = buttonDefs[i];
+            const { x, y } = layout[i];
+
+            this.ctx.drawImage(btnPlayImg, x, y, buttonWidth, buttonHeight);
+
+            // Font size adapts to text length and to the scaled button size
+            let baseFontSize = 30;
+            if (text.length > 10) baseFontSize = 24;
+            if (text.length > 15) baseFontSize = 20;
+            const fontSize = Math.max(10, Math.round(baseFontSize * fontScale));
+            this.ctx.font = `bold ${fontSize}px Arial`;
+
+            const textX = x + buttonWidth / 2;
+            const textY = y + buttonHeight / 2 + fontSize * 0.35;
+
+            this.ctx.fillStyle = "rgba(0,0,0,0.7)";
+            this.ctx.fillText(text, textX + 2, textY + 2);
+            this.ctx.fillStyle = "white";
+            this.ctx.fillText(text, textX, textY);
+
+            this.buttonAreas[key] = { x, y, width: buttonWidth, height: buttonHeight };
+        }
+
+        // If authenticated, show the welcome message above the first button
         if (this.isUserAuthenticated && this.userProfile) {
-            // Draw user info above the buttons
-            this.ctx.font = "bold 20px Arial";
-            this.ctx.textAlign = "center";
-            
-            // Username with welcome message
+            const first = layout[0];
             const displayName = this.userProfile.displayName || 'User';
             const welcomeMessage = `${this.resources.i18n.get('auth.welcome')}, ${displayName}`;
-            
-            const userInfoY = buttonsY - 60; // Increased from -30 to -60 for more space between welcome message and buttons
-            
-            // Text shadow for better visibility
+            const welcomeY = first.y - Math.max(40, buttonHeight * 0.7);
+
+            this.ctx.font = "bold 20px Arial";
             this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-            this.ctx.fillText(welcomeMessage, canvasWidth / 2 + 2, userInfoY + 2);
-            
-            // Main text color with a highlight color
-            this.ctx.fillStyle = "#ffcc00"; // Gold/yellow color for the username
-            this.ctx.fillText(welcomeMessage, canvasWidth / 2, userInfoY);
-            
-            // Add sign out text below (smaller)
+            this.ctx.fillText(welcomeMessage, canvasWidth / 2 + 2, welcomeY + 2);
+            this.ctx.fillStyle = "#ffcc00";
+            this.ctx.fillText(welcomeMessage, canvasWidth / 2, welcomeY);
+
             this.ctx.font = "16px Arial";
             const signOutText = `(${this.resources.i18n.get('auth.clickToSignOut')})`;
-            
-            // Text shadow for better visibility
             this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-            this.ctx.fillText(signOutText, canvasWidth / 2 + 2, userInfoY + 22 + 2);
-            
-            // Light gray for the sign out text
+            this.ctx.fillText(signOutText, canvasWidth / 2 + 2, welcomeY + 24);
             this.ctx.fillStyle = "#cccccc";
-            this.ctx.fillText(signOutText, canvasWidth / 2, userInfoY + 22);
-            
-            // Add clickable area for signing out
+            this.ctx.fillText(signOutText, canvasWidth / 2, welcomeY + 22);
+
             this.buttonAreas.signOut = {
                 x: canvasWidth / 2 - 100,
-                y: userInfoY - 20,
+                y: welcomeY - 20,
                 width: 200,
                 height: 50
             };
-        } else {
-            // User is not authenticated, draw the LOGIN button (third button)
-            const loginX = editorX + buttonWidth + buttonSpacing;
-            this.ctx.drawImage(btnPlayImg, loginX, buttonsY);
-            
-            // Get "SIGN IN" text and convert to uppercase
-            const loginText = this.resources.i18n.get('auth.signIn').toUpperCase();
-            
-            // Adjust font size based on text length to prevent overflow
-            let loginFontSize = 30; // Default size
-            if (loginText.length > 10) {
-                loginFontSize = 24;
-            }
-            if (loginText.length > 15) {
-                loginFontSize = 20;
-            }
-            
-            // Set the font size for login button text
-            this.ctx.font = `bold ${loginFontSize}px Arial`;
-            
-            // Text shadow for better visibility
-            this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-            this.ctx.fillText(loginText, loginX + buttonWidth/2 + 2, playBtnCenterY + 2);
-            
-            // Main text color
-            this.ctx.fillStyle = "white";
-            this.ctx.fillText(loginText, loginX + buttonWidth/2, playBtnCenterY);
-            
-            // Add login button to clickable areas
-            this.buttonAreas.login = { x: loginX, y: buttonsY, width: buttonWidth, height: buttonHeight };
         }
         
         // Draw version info at the bottom right corner of the canvas
@@ -2070,8 +2031,10 @@ class Game {
      * Draw top action buttons for game controls
      */
     drawTopActionButtons() {
-        const buttonSize = 48;
-        const spacing = 10;
+        // Scale the action buttons down on small screens so they stay on-screen
+        // and clear of the corner logo.
+        const buttonSize = Math.min(48, this.canvas.width * 0.12);
+        const spacing = Math.max(6, buttonSize * 0.2);
         const topMargin = 10;
         
         // Button images from resources - use the correct keys that match how they were loaded
@@ -2122,7 +2085,9 @@ class Game {
         if (this.resources.images && this.resources.images.logo && this.resources.images.logo.image) {
             const logoImg = this.resources.images.logo.image;
             const padding = 10; // Increased padding from the corner
-            const logoSize = 100; // Small size for the corner logo
+            // Scale the corner logo down on small screens so it doesn't dominate
+            // the view or overlap the centered action buttons.
+            const logoSize = Math.min(100, this.canvas.width * 0.16, this.canvas.height * 0.14);
             const aspectRatio = logoImg.width / logoImg.height;
             const logoWidth = logoSize * aspectRatio;
             const logoHeight = logoSize;
@@ -2181,18 +2146,20 @@ class Game {
         // Check if logo is loaded
         if (this.resources.images && this.resources.images.logo && this.resources.images.logo.image) {
             const logoImg = this.resources.images.logo.image;
+            // Fit the logo to the screen width so it never overflows on narrow screens
+            const fitScale = Math.min(1, (this.ctx.canvas.width * 0.85) / logoImg.width);
             const logoWidth = logoImg.width;
             const logoHeight = logoImg.height;
-            
+
             // Calculate animation progress
             const elapsed = Date.now() - this.logoAnimationStartTime;
             const progress = Math.min(elapsed / this.logoAnimationDuration, 1);
-            
+
             // Apply easing function for smoother animation
             const easedProgress = this._easeOutBack(progress);
-            
-            // Calculate scale factor from 0.5 to 1.0
-            const scale = 0.5 + 0.5 * easedProgress;
+
+            // Calculate scale factor from 0.5 to 1.0, then fit to the screen width
+            const scale = (0.5 + 0.5 * easedProgress) * fitScale;
             
             // Calculate opacity from 0 to 1
             const opacity = easedProgress;
@@ -2226,8 +2193,9 @@ class Game {
             this.ctx.fillText(this.resources.i18n.get('loading.title'), textX, textY - 20);
         }
         
-        // Position the "Press Space to Load Game" text much lower on the screen
-        const instructionY = textY + 200; // Increased from +150 to +200 for even lower position
+        // Position the "Press Space to Load Game" text lower on the screen,
+        // clamped so it stays on-screen on short viewports.
+        const instructionY = Math.min(this.ctx.canvas.height - 30, textY + 200);
         
         this.ctx.font = "20px Arial";
         this.ctx.textAlign = "center";
@@ -2292,161 +2260,112 @@ class Game {
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
 
-        // Draw logo at the top
+        // Draw logo at the top. Scale by BOTH width and height so that on short
+        // landscape screens the logo + title don't eat the whole viewport and push
+        // the mode buttons off the bottom (where they'd overlap the Back button).
         const logoImg = this.resources.images.logo.image;
-        const logoWidth = logoImg.width * 0.7; // Scale down a bit
-        const logoHeight = logoImg.height * 0.7;
-        
-        const logoX = this.ctx.canvas.width / 2 - logoWidth / 2;
-        const logoY = 50;
+        const logoScale = Math.min(
+            0.7,
+            (this.canvas.width * 0.85) / logoImg.width,
+            (this.canvas.height * 0.28) / logoImg.height
+        );
+        const logoWidth = logoImg.width * logoScale;
+        const logoHeight = logoImg.height * logoScale;
+
+        const logoX = this.canvas.width / 2 - logoWidth / 2;
+        const logoY = Math.max(8, this.canvas.height * 0.04);
         this.ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
-        
-        // Title text
-        this.ctx.font = "36px Arial";
-        this.ctx.fillStyle = "#fff";
+
+        // Title text (scaled down on narrow / short screens)
+        const titleFontSize = Math.min(36, this.canvas.width * 0.08, this.canvas.height * 0.09);
+        this.ctx.font = `${titleFontSize}px Arial`;
         this.ctx.textAlign = "center";
-        
-        // Draw title with shadow
-        const titleY = logoY + logoHeight + 40;
+
+        const titleY = logoY + logoHeight + titleFontSize + 8;
         this.ctx.fillStyle = "rgba(0,0,0,0.7)";
         this.ctx.fillText(this.resources.i18n.get('gameModes.select'), this.canvas.width / 2 + 2, titleY + 2);
         this.ctx.fillStyle = "#ffaa00";
         this.ctx.fillText(this.resources.i18n.get('gameModes.select'), this.canvas.width / 2, titleY);
-        
-        // Draw buttons for different game modes
+
+        // ----- Mode buttons: fit the vertical stack + Back button to the screen -----
+        // Native button art is 300x92. Drawn at native size the three stacked buttons
+        // plus the bottom Back button overflow short screens, so we scale the stack to
+        // fit the space between the title and a reserved bottom strip for Back.
         const btnPlayImg = this.resources.images.btnPlay.image;
-        const buttonWidth = btnPlayImg.width;
-        const buttonHeight = btnPlayImg.height;
-        
-        // Calculate positions for 3 buttons with equal spacing
-        const buttonsStartY = titleY + 60;
-        const buttonSpacing = 20;
-        
-        // Normal Mode Button
-        const normalModeX = this.canvas.width / 2 - buttonWidth / 2;
-        const normalModeY = buttonsStartY;
-        this.ctx.drawImage(btnPlayImg, normalModeX, normalModeY);
-        
-        // Get "NORMAL MODE" text and convert to uppercase
-        const normalModeText = this.resources.i18n.get('gameModes.normal').toUpperCase();
-        
-        // Adjust font size based on text length to prevent overflow
-        let normalModeFontSize = 30; // Default size
-        if (normalModeText.length > 10) {
-            normalModeFontSize = 24; // Smaller text for longer strings
+        const nativeBtnW = btnPlayImg.width;
+        const nativeBtnH = btnPlayImg.height;
+
+        // Back button is sized independently so it always fits the bottom strip
+        const backButtonHeight = Math.min(nativeBtnH * 0.8, this.canvas.height * 0.11);
+        const backButtonScale = backButtonHeight / nativeBtnH;
+        const backButtonWidth = nativeBtnW * backButtonScale;
+        const backButtonY = this.canvas.height - backButtonHeight - 16;
+
+        const modeButtons = [
+            { key: 'normalMode', text: this.resources.i18n.get('gameModes.normal').toUpperCase() },
+            { key: 'timeAttack', text: this.resources.i18n.get('gameModes.timeAttack').toUpperCase() },
+            { key: 'challengeMode', text: this.resources.i18n.get('gameModes.challenge').toUpperCase() },
+        ];
+        const modeCount = modeButtons.length;
+        const gapRatio = 0.22; // spacing between buttons as a fraction of button height
+        const topOfButtons = titleY + 30;
+        const availableV = Math.max(60, (backButtonY - 16) - topOfButtons);
+
+        // Scale so the whole stack fits vertically and each button fits horizontally
+        const heightUnits = modeCount + (modeCount - 1) * gapRatio;
+        const scale = Math.min(
+            1,
+            (availableV / heightUnits) / nativeBtnH,
+            (this.canvas.width * 0.85) / nativeBtnW
+        );
+
+        const buttonWidth = nativeBtnW * scale;
+        const buttonHeight = nativeBtnH * scale;
+        const buttonSpacing = buttonHeight * gapRatio;
+        const stackHeight = buttonHeight * modeCount + buttonSpacing * (modeCount - 1);
+        const buttonX = this.canvas.width / 2 - buttonWidth / 2;
+        const buttonsStartY = topOfButtons + Math.max(0, (availableV - stackHeight) / 2);
+
+        // Draw the mode buttons and register their clickable areas
+        this.buttonAreas = {};
+        const modeFontScale = buttonHeight / nativeBtnH;
+        for (let i = 0; i < modeButtons.length; i++) {
+            const { key, text } = modeButtons[i];
+            const x = buttonX;
+            const y = buttonsStartY + i * (buttonHeight + buttonSpacing);
+
+            this.ctx.drawImage(btnPlayImg, x, y, buttonWidth, buttonHeight);
+
+            let baseFontSize = 30;
+            if (text.length > 10) baseFontSize = 24;
+            if (text.length > 15) baseFontSize = 20;
+            const fontSize = Math.max(10, Math.round(baseFontSize * modeFontScale));
+            this.ctx.font = `bold ${fontSize}px Arial`;
+
+            const textX = x + buttonWidth / 2;
+            const textY = y + buttonHeight / 2 + fontSize * 0.35;
+            this.ctx.fillStyle = "rgba(0,0,0,0.7)";
+            this.ctx.fillText(text, textX + 2, textY + 2);
+            this.ctx.fillStyle = "white";
+            this.ctx.fillText(text, textX, textY);
+
+            this.buttonAreas[key] = { x, y, width: buttonWidth, height: buttonHeight };
         }
-        if (normalModeText.length > 15) {
-            normalModeFontSize = 20; // Even smaller for very long translations
-        }
-        
-        this.ctx.font = `bold ${normalModeFontSize}px Arial`;
-        
-        // Position text centered in the button
-        const normalModeCenterY = normalModeY + buttonHeight / 2 + 10; // +10 for optical centering
-        
-        // Text shadow for better visibility
-        this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-        this.ctx.fillText(normalModeText, normalModeX + buttonWidth / 2 + 2, normalModeCenterY + 2);
-        
-        // Main text color
-        this.ctx.fillStyle = "white";
-        this.ctx.fillText(normalModeText, normalModeX + buttonWidth / 2, normalModeCenterY);
-        
-        // Time Attack Button
-        const timeAttackX = normalModeX;
-        const timeAttackY = normalModeY + buttonHeight + buttonSpacing;
-        this.ctx.drawImage(btnPlayImg, timeAttackX, timeAttackY);
-        
-        // Get "TIME ATTACK" text and convert to uppercase
-        const timeAttackText = this.resources.i18n.get('gameModes.timeAttack').toUpperCase();
-        
-        // Adjust font size based on text length to prevent overflow
-        let timeAttackFontSize = 30; // Default size
-        if (timeAttackText.length > 10) {
-            timeAttackFontSize = 24; // Smaller text for longer strings
-        }
-        if (timeAttackText.length > 15) {
-            timeAttackFontSize = 20; // Even smaller for very long translations
-        }
-        
-        this.ctx.font = `bold ${timeAttackFontSize}px Arial`;
-        
-        // Position text centered in the button
-        const timeAttackCenterY = timeAttackY + buttonHeight / 2 + 10; // +10 for optical centering
-        
-        // Text shadow for better visibility
-        this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-        this.ctx.fillText(timeAttackText, timeAttackX + buttonWidth / 2 + 2, timeAttackCenterY + 2);
-        
-        // Main text color
-        this.ctx.fillStyle = "white";
-        this.ctx.fillText(timeAttackText, timeAttackX + buttonWidth / 2, timeAttackCenterY);
-        
-        // Challenge Mode Button
-        const challengeModeX = normalModeX;
-        const challengeModeY = timeAttackY + buttonHeight + buttonSpacing;
-        this.ctx.drawImage(btnPlayImg, challengeModeX, challengeModeY);
-        
-        // Get "CHALLENGE MODE" text and convert to uppercase
-        const challengeModeText = this.resources.i18n.get('gameModes.challenge').toUpperCase();
-        
-        // Adjust font size based on text length to prevent overflow
-        let challengeModeFontSize = 30; // Default size
-        if (challengeModeText.length > 10) {
-            challengeModeFontSize = 24; // Smaller text for longer strings
-        }
-        if (challengeModeText.length > 15) {
-            challengeModeFontSize = 20; // Even smaller for very long translations
-        }
-        
-        this.ctx.font = `bold ${challengeModeFontSize}px Arial`;
-        
-        // Position text centered in the button
-        const challengeModeCenterY = challengeModeY + buttonHeight / 2 + 10; // +10 for optical centering
-        
-        // Text shadow for better visibility
-        this.ctx.fillStyle = "rgba(0,0,0,0.7)";
-        this.ctx.fillText(challengeModeText, challengeModeX + buttonWidth / 2 + 2, challengeModeCenterY + 2);
-        
-        // Main text color
-        this.ctx.fillStyle = "white";
-        this.ctx.fillText(challengeModeText, challengeModeX + buttonWidth / 2, challengeModeCenterY);
-        
-        // Back button (smaller, centered at bottom)
-        const backButtonScale = 0.8;
-        const backButtonWidth = buttonWidth * backButtonScale;
-        const backButtonHeight = buttonHeight * backButtonScale;
-        const backButtonX = this.canvas.width / 2 - backButtonWidth / 2; // Center horizontally
-        const backButtonY = this.canvas.height - backButtonHeight - 20;
-        
-        // Draw scaled back button
-        this.ctx.save();
-        this.ctx.translate(backButtonX, backButtonY);
-        this.ctx.scale(backButtonScale, backButtonScale);
-        this.ctx.drawImage(btnPlayImg, 0, 0);
-        this.ctx.restore();
-        
-        // Back button label
-        this.ctx.font = "bold 18px Arial";
+
+        // Back button (centered at the bottom)
+        const backButtonX = this.canvas.width / 2 - backButtonWidth / 2;
+        this.ctx.drawImage(btnPlayImg, backButtonX, backButtonY, backButtonWidth, backButtonHeight);
+
+        const backFontSize = Math.max(11, Math.round(18 * (backButtonScale / 0.8)));
+        this.ctx.font = `bold ${backFontSize}px Arial`;
         const backButtonCenterX = backButtonX + backButtonWidth / 2;
-        const backButtonCenterY = backButtonY + backButtonHeight / 2 + 6;
-        
+        const backButtonCenterY = backButtonY + backButtonHeight / 2 + backFontSize * 0.35;
         this.ctx.fillStyle = "rgba(0,0,0,0.7)";
         this.ctx.fillText(this.resources.i18n.get('buttons.back'), backButtonCenterX + 2, backButtonCenterY + 2);
         this.ctx.fillStyle = "white";
         this.ctx.fillText(this.resources.i18n.get('buttons.back'), backButtonCenterX, backButtonCenterY);
-        
-        // Mode descriptions
-        this.ctx.font = "16px Arial";
-        this.ctx.textAlign = "center";
-        
-        // Store clickable areas for the buttons
-        this.buttonAreas = {
-            normalMode: { x: normalModeX, y: normalModeY, width: buttonWidth, height: buttonHeight },
-            timeAttack: { x: timeAttackX, y: timeAttackY, width: buttonWidth, height: buttonHeight },
-            challengeMode: { x: challengeModeX, y: challengeModeY, width: buttonWidth, height: buttonHeight },
-            back: { x: backButtonX, y: backButtonY, width: backButtonWidth, height: backButtonHeight }
-        };
+
+        this.buttonAreas.back = { x: backButtonX, y: backButtonY, width: backButtonWidth, height: backButtonHeight };
     }
 
     /**

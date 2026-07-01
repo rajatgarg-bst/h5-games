@@ -1,5 +1,5 @@
 // Import dependencies
-import { GAME_STATES, DEBUG, GAME_MODES } from './config/config.js';
+import { GAME_STATES, DEBUG, GAME_MODES, MOBILE_CONTROLS } from './config/config.js';
 import { game } from './game.js';
 
 // Track if loading text element has been created
@@ -200,17 +200,32 @@ function setupTouchControls(gameInstance) {
         // Make sure the arrows are visible for mobile devices
         virtualArrows.style.display = 'block';
         
-        // Set initial position (to avoid default position being off-screen)
+        // Default position: bottom-left, sitting in the reserved band just above
+        // the score panel (see MOBILE_CONTROLS.DPAD_BAND, which the board layout
+        // reserves in level.js) so the pad never overlaps the puzzle on any level.
+        const panelH = Math.min(window.innerWidth * 0.95, 900) / (800 / 130);
         virtualArrows.style.position = 'fixed';
-        virtualArrows.style.bottom = '150px';
-        virtualArrows.style.left = '20px';
-        
+        virtualArrows.style.left = `${ARROWS_EDGE_MARGIN}px`;
+        virtualArrows.style.bottom = `${Math.round(panelH + MOBILE_CONTROLS.DPAD_BOTTOM_GAP)}px`;
+        virtualArrows.style.top = 'auto';
+        virtualArrows.style.right = 'auto';
+
         // Make the controls draggable
         makeDraggable(virtualArrows, dragHandle);
-        
-        // Try to load position from localStorage
+
+        // Try to load position from localStorage (clamped to the safe area)
         loadArrowPosition(virtualArrows);
-        
+
+        // Re-clamp on viewport changes (rotation/resize) so a saved position can
+        // never end up overlapping the top UI or off-screen. Only applies when the
+        // pad is explicitly positioned via top/left (dragged/loaded); the default
+        // is bottom-anchored and adjusts on its own.
+        window.addEventListener('resize', () => {
+            if (virtualArrows.style.top && virtualArrows.style.top !== 'auto') {
+                clampArrowsToSafeArea(virtualArrows);
+            }
+        });
+
         // Update visibility based on game state
         updateArrowsVisibility(gameInstance.state);
     }
@@ -222,12 +237,20 @@ function setupTouchControls(gameInstance) {
     // Function to update visibility of arrows based on game state
     function updateArrowsVisibility(state) {
         if (!virtualArrows || !gameInstance.isMobileDevice()) return;
-        
-        // Only show arrows during active gameplay
+
+        // Only show arrows during active gameplay. IMPORTANT: also toggle `display`
+        // (not just the `.visible` opacity class). The inline display:block set at
+        // init overrides the CSS, so relying on opacity alone leaves an invisible
+        // pad on menu screens that still captures touches and blocks buttons
+        // underneath it (e.g. the NORMAL MODE button on the game-mode screen).
         if (state === GAME_STATES.PLAY) {
             virtualArrows.classList.add('visible');
+            virtualArrows.style.display = 'block';
+            virtualArrows.style.pointerEvents = 'auto';
         } else {
             virtualArrows.classList.remove('visible');
+            virtualArrows.style.display = 'none';
+            virtualArrows.style.pointerEvents = 'none';
         }
     }
     
@@ -459,14 +482,15 @@ function makeDraggable(element, handle = null) {
         
         e.preventDefault();
         
-        // Calculate the new position
+        // Apply the tentative position, then snap it back into the safe band so the
+        // pad can't be dragged onto the puzzle or the top UI.
         const touch = e.touches ? e.touches[0] : e;
         const deltaX = touch.clientX - initialX;
         const deltaY = touch.clientY - initialY;
-        
-        // Update the position
+
         element.style.left = `${initialLeft + deltaX}px`;
         element.style.top = `${initialTop + deltaY}px`;
+        clampArrowsToSafeArea(element);
     }
     
     function endDrag() {
@@ -483,6 +507,33 @@ function makeDraggable(element, handle = null) {
         // Save the position to localStorage
         saveArrowPosition(element);
     }
+}
+
+// Keep the on-screen D-pad within the viewport and clear of the top UI band
+// (corner logo + pause/undo/settings row). Used on load, during drag, and on resize.
+const ARROWS_TOP_CLEARANCE = 120; // px reserved at the top for logo + action buttons
+const ARROWS_EDGE_MARGIN = 12;    // px gap kept from the screen edges
+
+function clampArrowsToSafeArea(element) {
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    const w = rect.width || 120;
+    const h = rect.height || 160;
+    // The board layout reserves DPAD_BAND above the score panel (level.js). Keep the
+    // pad inside that band so it can never sit on the puzzle or the top UI, on any level.
+    const panelH = Math.min(window.innerWidth * 0.95, 900) / (800 / 130);
+    const bandBottom = window.innerHeight - panelH - 8;                 // just above the panel
+    const bandTop = Math.max(ARROWS_TOP_CLEARANCE, bandBottom - MOBILE_CONTROLS.DPAD_BAND);
+    const minY = bandTop;
+    const maxY = Math.max(minY, bandBottom - h);
+    const maxX = Math.max(ARROWS_EDGE_MARGIN, window.innerWidth - w - ARROWS_EDGE_MARGIN);
+    const x = Math.min(Math.max(ARROWS_EDGE_MARGIN, rect.left), maxX);
+    const y = Math.min(Math.max(minY, rect.top), maxY);
+    element.style.position = 'fixed';
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+    element.style.right = 'auto';
+    element.style.bottom = 'auto';
 }
 
 /**
@@ -518,23 +569,14 @@ function loadArrowPosition(element) {
         const data = JSON.parse(localStorage.getItem('sokoban_arrows_position'));
         
         if (data && data.posX !== undefined && data.posY !== undefined) {
-            // Convert percentage position back to pixels
-            const posX = data.posX * window.innerWidth;
-            const posY = data.posY * window.innerHeight;
-            
-            // Ensure the element isn't positioned off-screen
-            const maxX = window.innerWidth - 100;
-            const maxY = window.innerHeight - 100;
-            const x = Math.max(0, Math.min(posX, maxX));
-            const y = Math.max(0, Math.min(posY, maxY));
-            
-            // Apply the position with fixed positioning to ensure proper dragging
+            // Convert percentage position back to pixels, then clamp to the safe
+            // area so a stale/bad saved position can't overlap the top UI.
             element.style.position = 'fixed';
-            element.style.left = `${x}px`;
-            element.style.top = `${y}px`;
-            // Clear any default right/bottom positioning that might interfere
+            element.style.left = `${data.posX * window.innerWidth}px`;
+            element.style.top = `${data.posY * window.innerHeight}px`;
             element.style.right = 'auto';
             element.style.bottom = 'auto';
+            clampArrowsToSafeArea(element);
         }
     } catch (err) {
         console.warn('Could not load arrow position from localStorage', err);
@@ -800,6 +842,14 @@ export function showLevelSelectDialog(gameInstance) {
     dialog.style.overflow = 'hidden';
     dialog.style.boxShadow = '0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5)';
     dialog.style.position = 'relative';
+    // Constrain to the viewport and lay the dialog out as a column so the title and
+    // Back button always stay on screen while the level list scrolls between them.
+    // Without a height cap the dialog overflows short (landscape) screens and clips
+    // both the header and the Back button off the top/bottom.
+    dialog.style.boxSizing = 'border-box';
+    dialog.style.maxHeight = '90vh';
+    dialog.style.display = 'flex';
+    dialog.style.flexDirection = 'column';
 
     // Add texture overlay for more wood-like feel
     const textureOverlay = document.createElement('div');
@@ -818,7 +868,8 @@ export function showLevelSelectDialog(gameInstance) {
     title.textContent = gameInstance.resources.i18n.get('levelSelect.title') || 'Select Level';
     title.style.color = '#ffd700';
     title.style.textAlign = 'center';
-    title.style.margin = '10px 0 20px 0';
+    title.style.margin = '6px 0 10px 0';
+    title.style.flex = '0 0 auto';
     title.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
     title.style.fontFamily = 'Arial, sans-serif';
     dialog.appendChild(title);
@@ -840,14 +891,21 @@ export function showLevelSelectDialog(gameInstance) {
     subtitle.textContent = gameModeText;
     subtitle.style.color = '#ffaa00';
     subtitle.style.textAlign = 'center';
-    subtitle.style.margin = '0 0 20px 0';
+    subtitle.style.margin = '0 0 10px 0';
+    subtitle.style.flex = '0 0 auto';
     subtitle.style.fontFamily = 'Arial, sans-serif';
     dialog.appendChild(subtitle);
 
     // Create levels container
     const levelsContainer = document.createElement('div');
     levelsContainer.style.overflowY = 'auto';
-    levelsContainer.style.maxHeight = '400px';
+    // Fill the space between the header and Back button and scroll internally.
+    // flex-basis 45vh gives the list a tall preferred height (so it fills most of
+    // the dialog even with few levels), grows on tall screens, and — with
+    // minHeight:0 — still shrinks and scrolls on short screens without ever
+    // pushing the Back button off the bottom.
+    levelsContainer.style.flex = '1 1 45vh';
+    levelsContainer.style.minHeight = '0';
     levelsContainer.style.padding = '10px';
     levelsContainer.style.backgroundColor = 'rgba(0,0,0,0.2)';
     levelsContainer.style.borderRadius = '10px';
@@ -1010,7 +1068,8 @@ export function showLevelSelectDialog(gameInstance) {
     const backButton = document.createElement('button');
     backButton.textContent = gameInstance.resources.i18n.get('buttons.back') || 'Back';
     backButton.style.display = 'block';
-    backButton.style.margin = '20px auto 0 auto';
+    backButton.style.margin = '14px auto 0 auto';
+    backButton.style.flex = '0 0 auto';
     backButton.style.padding = '10px 30px'; // Increased horizontal padding
     backButton.style.fontSize = '16px';
     backButton.style.backgroundColor = '#654321';
@@ -1023,6 +1082,12 @@ export function showLevelSelectDialog(gameInstance) {
     backButton.style.width = 'auto'; // Let width adjust to content
     backButton.style.minWidth = '120px'; // Slightly increased minimum width
     backButton.style.maxWidth = '250px'; // Increased maximum width for longer text
+    // The global `button { aspect-ratio: 4/3 }` rule (main.scss) was stretching this
+    // button to ~180px tall once the flex column widened it. Cancel the ratio, let
+    // the height follow its padding, and keep it centered instead of full-width.
+    backButton.style.aspectRatio = 'auto';
+    backButton.style.height = 'auto';
+    backButton.style.alignSelf = 'center';
 
     // Function to handle going back to game mode selection
     const goBack = () => {

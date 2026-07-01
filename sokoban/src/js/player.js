@@ -135,9 +135,12 @@ export class Player {
      */
     findStartPosition() {
         const levelData = game.levelData;
-        const { width, layers } = levelData;
-        
-        for (let y = 0; y < width; y++) {
+        const { width, height, layers } = levelData;
+
+        // Scan every row (use height for the vertical bound). Using `width` here
+        // skips the bottom rows of levels that are taller than they are wide
+        // (e.g. level 48, 13x16), so the player start tile is never found.
+        for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const tileIndex = y * width + x;
                 if (layers[0].data[tileIndex] === 88) {

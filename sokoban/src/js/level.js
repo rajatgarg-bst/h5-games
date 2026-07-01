@@ -4,7 +4,7 @@
  */
 
 import { game } from './game.js';
-import { TILES, DEBUG } from './config/config.js';
+import { TILES, DEBUG, MOBILE_CONTROLS } from './config/config.js';
 
 /**
  * Level class manages the game board/map display and collision detection
@@ -58,28 +58,77 @@ export class Level {
 
         const levelData = game.levelData;
 
+        // Reserved UI space is responsive: it must track the actual on-screen size
+        // of the top logo/buttons and the bottom score panel. Hard-coded values
+        // squeeze the board on short screens and let it overlap the panel on wide ones.
+        const canvasWidth = this.ctx.canvas.width;
+        const canvasHeight = this.ctx.canvas.height;
+
+        // Landscape (wide + short) needs a different layout than portrait: reserving
+        // a tall D-pad band above the score panel on a short viewport leaves no
+        // vertical room, so the board shrinks to nothing and vanishes. In landscape
+        // the D-pad instead lives in a column down the left edge, so we reserve
+        // horizontal space there and keep the full height for the board.
+        const isMobile = !!(game.isMobileDevice && game.isMobileDevice());
+        const isLandscape = canvasWidth > canvasHeight;
+
+        // Bottom: mirror how score.js sizes the wood panel (800x130 art, capped at 900 wide).
+        const scorePanelWidth = Math.min(canvasWidth * 0.95, 900);
+        const scorePanelHeight = scorePanelWidth / (800 / 130);
+        this.bottomReservedSpace = scorePanelHeight + 20;
+
+        // On touch devices reserve space for the on-screen D-pad so the puzzle is
+        // never drawn under the controls. Portrait: a band above the score panel.
+        // Landscape: a column on the left (see comment above).
+        let leftReservedSpace = 0;
+        if (isMobile) {
+            if (isLandscape) {
+                leftReservedSpace = MOBILE_CONTROLS.DPAD_COLUMN;
+            } else {
+                this.bottomReservedSpace += MOBILE_CONTROLS.DPAD_BAND;
+            }
+        }
+
+        // Top: room for the corner logo / action buttons, shrinking on short screens.
+        this.topReservedSpace = Math.min(100, canvasHeight * 0.14);
+
         // Calculate available screen space (minus reserved areas)
-        const availableWidth = this.ctx.canvas.width;
-        const availableHeight = this.ctx.canvas.height - this.topReservedSpace - this.bottomReservedSpace;
+        let availableWidth = canvasWidth - leftReservedSpace;
+        let availableHeight = canvasHeight - this.topReservedSpace - this.bottomReservedSpace;
+
+        // Safety net: never let the reserved areas swallow the whole board. On very
+        // short viewports reclaim vertical space from the reserved bottom band while
+        // still keeping the score panel itself clear.
+        const minBoardHeight = Math.max(120, canvasHeight * 0.3);
+        if (availableHeight < minBoardHeight) {
+            const minBottom = scorePanelHeight + 20;
+            const deficit = minBoardHeight - availableHeight;
+            this.bottomReservedSpace = Math.max(minBottom, this.bottomReservedSpace - deficit);
+            availableHeight = canvasHeight - this.topReservedSpace - this.bottomReservedSpace;
+        }
 
         // Calculate the maximum tile size that will fit in the available space
         const maxWidthPerTile = availableWidth / levelData.width;
         const maxHeightPerTile = availableHeight / levelData.height;
-        
-        // Choose the smaller of the two to maintain aspect ratio
-        const scaledTileSize = Math.floor(Math.min(maxWidthPerTile, maxHeightPerTile));
-        
+
+        // Choose the smaller of the two to maintain aspect ratio (never below 1px)
+        const scaledTileSize = Math.max(1, Math.floor(Math.min(maxWidthPerTile, maxHeightPerTile)));
+
         // Calculate the scale factor relative to the base output width
         this.scaleFactor = scaledTileSize / this.baseOutputWidth;
-        // Ensure minimum scale factor
-        this.scaleFactor = Math.max(0.5, Math.min(this.scaleFactor, 1.5));
+        // Cap the upper scale so tiles don't get huge on large screens, but do NOT
+        // enforce a lower bound: the board must always shrink enough to fit small
+        // screens rather than overflowing and being clipped off-canvas.
+        this.scaleFactor = Math.min(this.scaleFactor, 1.5);
         
         // Update the output width based on the scale factor
         this.outputWidth = Math.floor(this.baseOutputWidth * this.scaleFactor);
         
-        // Calculate the starting position to center the level on the canvas
-        this.startX = Math.max(0, Math.floor((availableWidth - levelData.width * this.outputWidth) / 2));
-        this.startY = Math.max(0, Math.floor(this.topReservedSpace + 
+        // Calculate the starting position to center the level within the available
+        // area (to the right of any reserved D-pad column, below the top UI).
+        this.startX = Math.max(leftReservedSpace, Math.floor(leftReservedSpace +
+                                             (availableWidth - levelData.width * this.outputWidth) / 2));
+        this.startY = Math.max(0, Math.floor(this.topReservedSpace +
                                              (availableHeight - levelData.height * this.outputWidth) / 2));
         
         // Clear the tile cache when loading a new level or when scaling changes

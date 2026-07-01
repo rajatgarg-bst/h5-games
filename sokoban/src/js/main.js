@@ -41,12 +41,12 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', function() {
     const canvas = document.getElementById('mainCanvas');
     if (canvas) {
-        // Set canvas to fill the entire viewport
+        // Set the initial canvas size to fill the viewport.
+        // NOTE: ongoing resize handling (and the full level re-layout it needs) lives
+        // in game.js `_setupResizeHandler`. We intentionally do NOT register a second
+        // resize listener here — a duplicate handler only reruns the same work.
         resizeCanvas(canvas);
-        
-        // Add resize event listener
-        window.addEventListener('resize', () => resizeCanvas(canvas));
-        
+
         console.log(`Canvas dimensions set to ${canvas.width}x${canvas.height}`);
     } else {
         console.error('Canvas element not found! Check if the HTML includes an element with id="mainCanvas"');
