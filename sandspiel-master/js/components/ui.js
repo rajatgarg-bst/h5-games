@@ -1,4 +1,5 @@
 import React from "react";
+import ReactDOM from "react-dom";
 
 import * as wasm from "../../crate/pkg/sandtable_bg.wasm";
 import { Species } from "../../crate/pkg/sandtable";
@@ -63,6 +64,7 @@ class Index extends React.Component {
       size: 2,
       selectedElement: Species.Water,
       showInfo: false,
+      showResetConfirm: false,
     };
     window.UI = this;
     // Always auto-play on initial load (regardless of the URL path the app is
@@ -100,12 +102,24 @@ class Index extends React.Component {
       size,
     });
   }
+  // Confirm via in-app modal rather than window.confirm() — when the game is
+  // embedded in a cross-origin/sandboxed iframe (e.g. game portals), browsers
+  // silently block native dialogs, which would make Reset appear to do
+  // nothing. This works the same whether the game is opened directly or
+  // embedded.
   reset() {
-    if (window.confirm("Are you sure you want to reset?")) {
-      this.play();
-      window.location = "#";
-      reset();
-    }
+    this.pause();
+    this.setState({ showResetConfirm: true });
+  }
+  confirmReset() {
+    this.setState({ showResetConfirm: false });
+    this.play();
+    window.location = "#";
+    reset();
+  }
+  cancelReset() {
+    this.setState({ showResetConfirm: false });
+    this.play();
   }
 
   async loadSVG(svgString) {
@@ -139,7 +153,8 @@ class Index extends React.Component {
   }
 
   render() {
-    let { size, paused, selectedElement, showInfo } = this.state;
+    let { size, paused, selectedElement, showInfo, showResetConfirm } =
+      this.state;
     return (
       <React.Fragment>
         {showInfo && (
@@ -147,6 +162,19 @@ class Index extends React.Component {
             <Info />
           </Menu>
         )}
+        {showResetConfirm &&
+          ReactDOM.createPortal(
+            <div className="confirm-scrim">
+              <div className="confirm-dialog">
+                <p>Are you sure you want to reset?</p>
+                <span>
+                  <button onClick={() => this.confirmReset()}>Reset</button>
+                  <button onClick={() => this.cancelReset()}>Cancel</button>
+                </span>
+              </div>
+            </div>,
+            document.getElementById("background")
+          )}
         <button
           onClick={() => this.togglePause()}
           className={paused ? "selected" : ""}

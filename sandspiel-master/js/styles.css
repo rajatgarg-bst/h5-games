@@ -177,6 +177,35 @@ button.selected {
   z-index: 4;
   background-color: #55555555;
 }
+
+.confirm-scrim {
+  position: absolute;
+  left: 0px;
+  right: 0px;
+  top: 0px;
+  bottom: 0px;
+  /* #ui is given an inline z-index:10 at runtime (js/layout.js), so this must
+     outrank it to actually block/dim the toolbar while reset is confirmed. */
+  z-index: 20;
+  background-color: #55555555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.confirm-dialog {
+  background-color: #f3f3f4;
+  border: 1px solid gray;
+  box-shadow: 0px 0px 3px 3px rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  max-width: 300px;
+  text-align: center;
+}
+.confirm-dialog p {
+  margin-bottom: 10px;
+}
+.confirm-dialog button {
+  margin: 0 4px;
+}
 .x {
   position: absolute;
   right: 4px;
